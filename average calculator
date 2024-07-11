@@ -1,0 +1,57 @@
+from flask import Flask, jsonify, request
+import requests
+import time
+
+app = Flask(__name__)
+window_size = 10
+numbers = []
+
+def fetch_numbers(numberid):
+    url_map = {
+        'p': 'http://20.244.56.144/test/primes',
+        'f': 'http://20.244.56.144/test/fibo',
+        'e': 'http://20.244.56.144/test/even', 
+        'r': 'http://20.244.56.144/test/rand' 
+    }
+    url = url_map.get(numberid)
+    if not url:
+        return []
+
+    try:
+        response = requests.get(url, timeout=0.5)
+        if response.status_code == 200:
+            fetched_numbers = response.json().get("numbers", [])
+            return fetched_numbers
+    except requests.RequestException:
+        return []
+    return []
+
+@app.route('/numbers/<numberid>', methods=['GET'])
+def get_numbers(numberid):
+    global numbers
+    start_time = time.time()
+
+    fetched_numbers = fetch_numbers(numberid)
+    for num in fetched_numbers:
+        if num not in numbers:
+            if len(numbers) >= window_size:
+                numbers.pop(0)
+            numbers.append(num)
+
+    avg = sum(numbers) / len(numbers) if numbers else 0
+    response = {
+        "windowPrevState": numbers[:-1] if numbers else [],
+        "windowCurrState": numbers,
+        "numbers": fetched_numbers,
+        "avg": avg
+    }
+
+
+    elapsed_time = (time.time() - start_time) * 1000
+    if elapsed_time < 500:
+        time.sleep((500 - elapsed_time) / 1000)
+
+    return jsonify(response)
+
+if __name__ == '__main__':
+    app.run(debug=True)
